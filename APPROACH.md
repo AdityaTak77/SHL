@@ -62,23 +62,15 @@ For a catalog of ~60 assessments, BM25 outperforms embedding models on exact-mat
 
 Every API call receives the full conversation history. A deterministic extractor builds a structured state object:
 
-```python
+```json
 {
-  "role": "java_developer",
-  "seniority": "professional",
-  "technical_skills": ["java", "spring", "sql"],
-  "personality_focus": False,
-  "cognitive_focus": False,
-  "language_requirements": ["english_us"],
-  "safety_critical": False,
-  "use_case": "selection",
-  "excluded_assessments": ["rest"],
-  "comparison_request": None,
+  "role": "java_developer", "seniority": "professional",
+  "technical_skills": ["java", "spring"], "personality_focus": false,
+  "language_requirements": ["english_us"], "use_case": "selection",
   "turn_count": 4
 }
 ```
-
-This state is the single source of truth for every retrieval decision. No memory = no state bugs.
+This state is the single source of truth. No memory = no state bugs.
 
 ## 4. Clarification Policy
 
@@ -128,20 +120,4 @@ Target: ≥0.7 across all 10 sample conversation scenarios.
 
 **Tradeoff: Groq Llama 3.3 70b** — High-speed API inference, large 128k context window, excellent markdown table instruction compliance.
 
-## 7. Deployment
 
-### Local
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-### Docker
-```bash
-docker build -t shl-recommender .
-docker run -p 8000:8000 -e GROQ_API_KEY=$KEY shl-recommender
-```
-
-### Environment Variables
-- `GROQ_API_KEY` — Required. Groq console API key.
-- `PORT` — Optional. Default 8000.
