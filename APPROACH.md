@@ -1,10 +1,12 @@
 <style>
   body { font-size: 11px; line-height: 1.4; }
-  h1, h2, h3 { margin-top: 12px; margin-bottom: 8px; }
+  h1 { font-size: 18px; margin-top: 12px; margin-bottom: 8px; }
+  h2 { font-size: 14px; margin-top: 12px; margin-bottom: 8px; }
+  h3 { font-size: 12px; margin-top: 12px; margin-bottom: 8px; }
   pre, code { font-size: 10px; }
 </style>
 
-# SHL Assessment Recommender — Approach Document
+# Approach Document
 
 ## 1. Architecture
 
