@@ -53,6 +53,12 @@ This state is the single source of truth. No memory = no state bugs.
 2. If turn_count >= 6, force a recommendation to preserve the 8-turn budget.
 3. Ask *only* when both role and seniority are unknown.
 
+**Bad pattern (wastes turns):**
+> "What role?" → User answers → "What seniority?" → User answers → (turn 4 before first rec)
+
+**Our pattern (compound single turn):**
+> "Could you tell me: the role title and seniority level?" → User answers → Recommend immediately
+
 ## 5. Evaluation Methodology
 
 Automated test suite (40+ tests targeting 100% pass rates across critical functions):
