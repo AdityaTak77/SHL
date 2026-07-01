@@ -3,7 +3,7 @@
 # Web framework
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-pydantic==2.10.3
+pydantic>=2.11.0
 
 # Testing
 pytest==8.3.4
