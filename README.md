@@ -1,114 +1,112 @@
 # SHL Assessment Recommender
 
-A production-ready conversational AI system for recommending SHL Individual Test Solutions. Built to maximise **Recall@10**, pass all schema checks, and handle real hiring scenarios end-to-end.
+> A production-ready full-stack AI system for recommending SHL Individual Test Solutions. Built to maximise **Recall@10**, handle real-world hiring scenarios dynamically, and ensure hallucination-free grounded recommendations.
 
-## Architecture Overview
+[![Live Demo](https://img.shields.io/badge/Live_Demo-shl--4n7k.onrender.com-success?style=for-the-badge)](https://shl-4n7k.onrender.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Groq](https://img.shields.io/badge/Groq_Llama_3-F65C2B?style=for-the-badge)](https://groq.com/)
 
+---
+
+## 🌟 Key Features
+
+- **Conversational RAG Agent:** Naturally asks targeted clarifying questions to narrow down job roles, seniority, and constraints before recommending SHL tests.
+- **Hybrid Retrieval Engine:** Combines exact-keyword BM25 scoring with semantic metadata ranking (seniority, language, test type) to accurately surface tests even for highly technical niches (e.g., *DevOps, Docker, Java*).
+- **Universal Role Recognition:** Dynamically detects any job role on the internet (e.g., *Data Analyst*, *Actuary*, *Astronaut*) and tailors recommendations intelligently without hardcoded blocks.
+- **Strict Hallucination Prevention:** Ensures 100% groundedness. Every single assessment returned by the LLM is programmatically validated against the official SHL catalog prior to surfacing.
+- **Dynamic Frontend UI:** A sleek, dark-mode/light-mode ready React interface that extracts conversation state in real-time to render an interactive "Hiring Profile" sidebar.
+
+## 🏗️ Architecture
+
+The system enforces a strict separation between retrieval (deterministic state-machines) and generation (LLM intelligence) to eliminate state-bugs and hallucinations.
+
+```mermaid
+graph LR
+    UI[React Frontend] -->|POST /chat| API(FastAPI Backend)
+    API --> State[State Extraction]
+    State --> Retrieval[Hybrid RAG Engine]
+    Retrieval -->|Top 10 Candidates| LLM[Groq Llama 3.3]
+    LLM --> Val[Catalog Validator]
+    Val --> UI
 ```
-POST /chat → Agent → State Extraction → BM25 + Metadata Retrieval → LLM Ranking → Validation → Response
-```
 
-### Key Design Decisions
+| Component | Technology | Rationale |
+|-----------|------------|-----------|
+| **LLM Engine** | Groq Llama 3.3 70B | Ultra-low latency inference, deep contextual reasoning, perfect markdown instruction following. |
+| **Retrieval** | BM25 + Multi-signal | Catches exact technical skill matches instantly where dense embeddings often hallucinate or fail. |
+| **State Tracker**| Stateless Regex Pipeline | Evaluates the *full* conversation history on every request, extracting constraints deterministically. |
 
-| Decision | Rationale |
-|----------|-----------|
-| BM25 keyword retrieval | Catches exact technology/skill matches (Java, Docker) |
-| Metadata scoring | Ensures seniority, language, and use-case alignment |
-| Gemini 2.0 Flash | Fast, cost-effective, strong instruction following |
-| Hallucination guard | Assert URL in catalog before every response |
-| Stateless + full history | Simple, robust, no session state bugs |
-| Compound clarification | Preserves turns (8-turn budget) |
+---
 
-## Quick Start
+## 🚀 Quick Start (Local Development)
+
+### 1. Backend (Python/FastAPI)
 
 ```bash
-# 1. Set your API key
-cp .env.example .env
-# Edit .env and add GEMINI_API_KEY
+# Clone the repository
+git clone https://github.com/AdityaTak77/SHL.git
+cd SHL
 
-# 2. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 3. Start server
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Configure environment variables
+# Add your Groq API Key to .env
+echo "GROQ_API_KEY=your_key_here" > .env
 
-# 4. Test health
-curl http://localhost:8000/health
+# Run the FastAPI server
+uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
+*The backend API will run at `http://127.0.0.1:8001/docs`.*
 
-## API Usage
-
-### POST /chat
+### 2. Frontend (React/Vite)
 
 ```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {"role": "user", "content": "I need to hire senior Java developers"}
-    ]
-  }'
+# Navigate to the frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the Vite development server
+npm run dev
 ```
+*The frontend will run at `http://localhost:5173` and automatically proxy requests to the backend.*
 
-#### Request Schema
-```json
-{
-  "messages": [
-    {"role": "user" | "assistant", "content": "string"}
-  ]
-}
-```
+---
 
-- Full conversation history is sent on every request (stateless design)
-- Last message must be from "user"
+## 🧪 Evaluation & Testing
 
-#### Response Schema
-```json
-{
-  "message": "string",
-  "recommendations": [
-    {
-      "name": "Assessment Name",
-      "url": "https://www.shl.com/products/product-catalog/view/...",
-      "test_type": "A,K,P"
-    }
-  ] | null,
-  "end_of_conversation": false
-}
-```
-
-- `recommendations`: null when clarifying, comparing, or refusing; 1-10 items when recommending
-- `test_type`: comma-separated codes (A=Ability, B=Biodata, C=Competencies, D=Development, K=Knowledge, P=Personality, S=Simulations)
-
-## Running Tests
+The system includes a rigorous, multi-layered evaluation suite designed to enforce quality and schema compliance.
 
 ```bash
 pytest tests/ -v
+python run_eval.py  # Runs End-to-End Recall@10 benchmarking
 ```
 
-## Docker Deployment
+- **Retrieval Quality:** Validates Recall@10 against complex real-world HR scenarios.
+- **Groundedness Checks:** Automatically drops hallucinated or non-SHL URLs.
+- **Behavior Probes:** Ensures the AI refuses illegal/compensation requests (e.g., HIPAA compliance, salary advice) gracefully without wasting an LLM call.
 
-```bash
-docker build -t shl-recommender .
-docker run -p 8000:8000 -e GEMINI_API_KEY=your_key shl-recommender
-```
+---
 
-## Project Structure
+## 📁 Project Structure
 
-```
+```text
 SHL/
 ├── app/
-│   ├── main.py          # FastAPI app, /health, /chat
-│   ├── agent.py         # Core agent orchestration
-│   ├── retrieval.py     # BM25 + metadata scoring engine
-│   ├── state.py         # State reconstruction from history
-│   ├── prompts.py       # Prompt templates + refusal logic
-│   └── catalog.py       # Catalog loading + validation
-├── catalog/
-│   └── shl_catalog.json # Full SHL Individual Test Solutions catalog
+│   ├── main.py          # FastAPI server and routing
+│   ├── agent.py         # LLM orchestration and logic
+│   ├── retrieval.py     # Hybrid BM25/Metadata search engine
+│   ├── state.py         # Conversational state & role extraction
+│   └── catalog.py       # JSON Catalog loader & validator
+├── frontend/
+│   ├── src/App.jsx      # React Main Layout & API integration
+│   └── src/index.css    # Comprehensive Design System
 ├── tests/
-│   └── test_recommender.py  # 40+ tests
-├── requirements.txt
-├── Dockerfile
-└── README.md
+│   └── test_recommender.py  # 500+ lines of robust Pytest logic
+├── catalog/
+│   └── shl_catalog.json # Ground-truth SHL Assessment Database
+└── APPROACH.md          # Detailed engineering design document
 ```
