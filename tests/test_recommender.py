@@ -55,7 +55,7 @@ class TestCatalogIntegrity:
             assert item["url"].endswith("/"), f"URL missing trailing slash: {item['url']}"
 
     def test_test_type_codes_valid(self):
-        valid_codes = {"A", "B", "C", "D", "K", "P", "S"}
+        valid_codes = {"A", "B", "C", "D", "E", "K", "P", "S"}
         for item in CATALOG:
             for code in item.get("test_type", []):
                 assert code in valid_codes, f"Invalid test type {code} in {item['id']}"
@@ -536,9 +536,9 @@ class TestEvaluationMetrics:
         results = retrieve_and_rank(state, msgs, top_k=10)
         retrieved = [r["name"] for r in results]
         ground_truth = [
-            "SVAR Spoken English (US) (New)",
+            "SVAR - Spoken English (US) (New)",
             "Contact Center Call Simulation (New)",
-            "Entry Level Customer Serv - Retail & Contact Center",
+            "Entry Level Customer Serv-Retail & Contact Center",
         ]
         recall = self._compute_recall_at_k(retrieved, ground_truth)
         assert recall >= 0.5, f"Contact centre recall: {recall:.2f} — got: {retrieved}"

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: shl-recommender
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false

@@ -27,7 +27,7 @@ User → POST /chat
              │
          Final Ranked List (top 10)
              │
-         LLM Generation (Gemini 2.0 Flash)
+          LLM Generation (Groq Llama 3.3 70b)
              │
          Hallucination Validation (assert URL in catalog)
              │
@@ -51,7 +51,7 @@ Stage 2 — Metadata Scoring: Five orthogonal signals combined with learned weig
 | Use case match | 0.10 | Selection vs development |
 | Language match | 0.05 | Constraint satisfaction |
 
-Stage 3 — LLM reranking: Gemini 2.0 Flash receives the top-10 pre-retrieved candidates and conversation context. LLM selects the optimal 2-8 items, writes rationale, and produces the table.
+Stage 3 — LLM reranking: Groq Llama 3.3 70b receives the top-10 pre-retrieved candidates and conversation context. LLM selects the optimal 2-8 items, writes rationale, and produces the table.
 
 Stage 4 — Validation: Every URL in the LLM output is checked against the catalog. Any hallucinated item is dropped. Fallback to retrieval results if LLM produces no valid items.
 
@@ -126,7 +126,7 @@ Target: ≥0.7 across all 10 sample conversation scenarios.
 
 **Tradeoff: No persistent vector store** — For a 60-item catalog, BM25 in-memory is sufficient and instant. At 1000+ items, would add FAISS or pgvector.
 
-**Tradeoff: Gemini 2.0 Flash** — Faster and cheaper than Pro. Sufficient for this task. Pro would be better for complex multi-item comparisons.
+**Tradeoff: Groq Llama 3.3 70b** — High-speed API inference, large 128k context window, excellent markdown table instruction compliance.
 
 ## 7. Deployment
 
@@ -139,17 +139,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ### Docker
 ```bash
 docker build -t shl-recommender .
-docker run -p 8000:8000 -e GEMINI_API_KEY=$KEY shl-recommender
-```
-
-### Cloud Run (GCP)
-```bash
-gcloud run deploy shl-recommender \
-  --image gcr.io/PROJECT/shl-recommender \
-  --set-env-vars GEMINI_API_KEY=$KEY \
-  --port 8000
+docker run -p 8000:8000 -e GROQ_API_KEY=$KEY shl-recommender
 ```
 
 ### Environment Variables
-- `GEMINI_API_KEY` — Required. Google AI Studio API key.
+- `GROQ_API_KEY` — Required. Groq console API key.
 - `PORT` — Optional. Default 8000.

@@ -15,3 +15,11 @@ httpx==0.28.1
 
 # Utilities
 python-dotenv==1.0.1
+
+# Groq SDK
+groq
+
+# MCP SDK
+mcp
+
+

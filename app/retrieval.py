@@ -122,7 +122,7 @@ def _seniority_score(item: Dict, state: Dict) -> float:
     if not state.get("seniority"):
         return 0.5  # neutral
     applicable = SENIORITY_MAP.get(state["seniority"], [state["seniority"]])
-    item_levels = set(item.get("job_levels", []))
+    item_levels = {level.lower() for level in item.get("job_levels", [])}
     if not item_levels:
         return 0.3
     overlap = len(item_levels & set(applicable))
@@ -211,6 +211,10 @@ def _use_case_score(item: Dict, state: Dict) -> float:
     if not use_case:
         return 0.5
     item_uses = " ".join(item.get("use_cases", [])).lower()
+    item_uses += " " + " ".join(item.get("keys", [])).lower()
+    item_uses += " " + item.get("name", "").lower()
+    item_uses += " " + item.get("description", "").lower()
+
     if use_case in item_uses:
         return 1.0
     if use_case == "selection" and any(
@@ -218,7 +222,11 @@ def _use_case_score(item: Dict, state: Dict) -> float:
     ):
         return 0.8
     if use_case == "development" and any(
-        kw in item_uses for kw in ["development", "develop", "learning", "coaching"]
+        kw in item_uses for kw in ["development", "develop", "learning", "coaching", "feedback", "grow"]
+    ):
+        return 0.8
+    if use_case == "audit" and any(
+        kw in item_uses for kw in ["audit", "reskill", "upskill", "transformation", "development", "develop", "skills"]
     ):
         return 0.8
     return 0.3
@@ -287,6 +295,15 @@ def retrieve_and_rank(
     # Stage 1: BM25 retrieval — get top 25 candidates
     bm25_results = bm25.get_top_k(query, k=25)
 
+    # Ensure core/universal assessments are always in the candidate list
+    core_ids = {"720", "4289", "4301", "4302"}
+    for item in CATALOG:
+        if item["id"] in core_ids:
+            if not any(r["id"] == item["id"] for r in bm25_results):
+                item_copy = dict(item)
+                item_copy["_bm25_score"] = 0.0
+                bm25_results.append(item_copy)
+
     # Get max BM25 score for normalisation
     max_bm25 = max((r.get("_bm25_score", 0) for r in bm25_results), default=1)
     max_bm25 = max(max_bm25, 0.001)
@@ -313,6 +330,35 @@ def retrieve_and_rank(
         item_copy = dict(item)
         item_copy["_final_score"] = final_score
         scored.append(item_copy)
+
+    # Apply custom boosting for core assessments
+    for item in scored:
+        iid = item.get("id")
+        
+        # 1. Boost OPQ32r (id: "720") and OPQ Universal Competency Report (id: "4289")
+        if iid in ["720", "4289"]:
+            # If seniority is professional or above
+            if state.get("seniority") in ["professional", "manager", "director", "executive"]:
+                item["_final_score"] += 0.4
+            # If role is leadership
+            if "leadership" in state.get("role_categories", []):
+                item["_final_score"] += 0.4
+            # If another OPQ report is in the candidates and has a decent score
+            if any("opq" in r.get("name", "").lower() and r.get("_bm25_score", 0) > 0 for r in bm25_results):
+                item["_final_score"] += 0.4
+            # If use case is audit
+            if state.get("use_case") == "audit":
+                item["_final_score"] += 0.3
+
+        # 2. Boost Global Skills Assessment (id: "4301") and Global Skills Development Report (id: "4302")
+        if iid in ["4301", "4302"]:
+            # If use case is audit or development
+            if state.get("use_case") in ["audit", "development"]:
+                item["_final_score"] += 0.4
+            # If the user query contains "reskill", "upskill", "talent audit", "skills"
+            query_lower = query.lower()
+            if any(kw in query_lower for kw in ["reskill", "upskill", "audit", "skills"]):
+                item["_final_score"] += 0.3
 
     # Stage 3: Metadata filtering — remove excluded assessments
     excluded = [normalize_text(e) for e in state.get("excluded_assessments", [])]

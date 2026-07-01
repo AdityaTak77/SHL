@@ -14,8 +14,12 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 from app.agent import run_agent
@@ -144,6 +148,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
         recommendations=validated_recs,
         end_of_conversation=end_of_conv,
     )
+
+
+# ─── Serve Static Frontend ───────────────────────────────────────────────────
+# Mount the React dist directory to serve HTML/JS/CSS on the root path.
+# Crucial: This mount is at the bottom so that FastAPI processes API paths first.
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────

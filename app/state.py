@@ -179,9 +179,20 @@ def extract_state(messages: List[Dict]) -> Dict:
             state["raw_context"].append({"role": "user", "text": content})
 
             # Extract experience years
-            exp_match = re.search(r"(\d+)\+?\s*years?", content_lower)
+            exp_match = re.search(r"(\d+)\+?\s*(year|yr|month|mo)s?", content_lower)
             if exp_match:
-                state["experience_years"] = int(exp_match.group(1))
+                num = int(exp_match.group(1))
+                unit = exp_match.group(2)
+                if unit.startswith("m"):
+                    state["experience_years"] = num / 12.0
+                else:
+                    state["experience_years"] = float(num)
+            else:
+                stripped = content_lower.strip()
+                if stripped.isdigit():
+                    val = float(stripped)
+                    if val < 40:
+                        state["experience_years"] = val
 
             # Extract seniority
             for seniority, keywords in SENIORITY_PATTERNS.items():
@@ -258,6 +269,8 @@ def extract_state(messages: List[Dict]) -> Dict:
                     state["industry"] = ind_name
 
             # Technical skills extraction
+            if "only " in content_lower:
+                state["technical_skills"] = []
             tech_skills = _extract_tech_skills(content_lower)
             for skill in tech_skills:
                 if skill not in state["technical_skills"]:
@@ -342,17 +355,22 @@ def needs_clarification(state: Dict, turn_count: int) -> bool:
     Decide whether to ask clarification or recommend.
     Conservative: ask only if critical info is missing and we have turns left.
     """
-    if turn_count >= 6:  # Conserve turns - recommend
+    if turn_count >= 8:  # Conserve turns - recommend
         return False
 
     # If we have enough info to recommend, skip clarification
     has_role = bool(state["role_categories"] or state["technical_skills"])
-    has_seniority = state["seniority"] is not None
+    has_seniority = state["seniority"] is not None or state["experience_years"] is not None
     has_context = len(state["raw_context"]) > 0
 
-    if not has_role and has_context and turn_count <= 2:
+    technical_roles = ["software_engineer", "data_scientist", "data_engineer", "devops_engineer"]
+    needs_tech_skills = any(r in technical_roles for r in state.get("role_categories", [])) and not state.get("technical_skills")
+
+    if not has_role and has_context and turn_count <= 4:
         return True
-    if not has_seniority and has_role and turn_count == 1:
+    if not has_seniority and has_role and turn_count <= 4:
+        return True
+    if needs_tech_skills and turn_count <= 4:
         return True
 
     return False
@@ -365,8 +383,12 @@ def build_clarification_question(state: Dict, turn_count: int) -> str:
     """
     missing = []
 
+    technical_roles = ["software_engineer", "data_scientist", "data_engineer", "devops_engineer"]
+
     if not state.get("role_categories") and not state.get("technical_skills"):
         missing.append("the role title and key responsibilities")
+    elif any(r in technical_roles for r in state.get("role_categories", [])) and not state.get("technical_skills"):
+        missing.append("the specific technical skills or programming languages required")
 
     if not state.get("seniority") and not state.get("experience_years"):
         missing.append("seniority level or years of experience")
@@ -380,6 +402,11 @@ def build_clarification_question(state: Dict, turn_count: int) -> str:
     if not missing:
         return ""
 
-    # Single compound question
-    parts = " / ".join(missing)
-    return f"To shape the right battery, could you tell me: {parts}?"
+    # Formatted as a numbered list
+    question = "To recommend the best tests, could you tell me:\n"
+    for i, part in enumerate(missing, 1):
+        # Capitalize the first letter of each part
+        capitalized_part = part[0].upper() + part[1:]
+        question += f"{i}. {capitalized_part}\n"
+    
+    return question.strip()

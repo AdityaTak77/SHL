@@ -4,8 +4,7 @@ Core Agent Logic — Orchestrates state extraction, retrieval, and LLM generatio
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from google import genai
-from google.genai import types as genai_types
+from groq import Groq
 
 from app.catalog import CATALOG, validate_recommendation, search_by_name
 from app.prompts import (
@@ -22,29 +21,35 @@ _CLIENT = None
 
 
 def get_model():
-    """Return a callable that generates content using Gemini."""
+    """Return a callable that generates content using Groq."""
     global _CLIENT
     if _CLIENT is None:
-        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
-            raise RuntimeError("GEMINI_API_KEY environment variable not set")
-        _CLIENT = genai.Client(api_key=api_key)
+            raise RuntimeError("GROQ_API_KEY environment variable not set")
+        _CLIENT = Groq(api_key=api_key)
     return _CLIENT
 
 
 def _generate(prompt: str) -> str:
-    """Generate content using Gemini 2.0 Flash."""
+    """Generate content using Llama 3.3 70b on Groq."""
     client = get_model()
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0.1,
-            max_output_tokens=2048,
-        ),
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        temperature=0.1,
+        max_tokens=2048,
     )
-    return response.text
+    return response.choices[0].message.content
 
 
 # ─── Intent Detection ────────────────────────────────────────────────────────
@@ -235,7 +240,7 @@ def run_agent(messages: List[Dict]) -> Tuple[str, Optional[List[Dict]], bool]:
     # ── 2. Handle refusal ─────────────────────────────────────────────────
     if intent.startswith("refuse:"):
         category = intent.split(":", 1)[1]
-        return REFUSAL_RESPONSES.get(category, REFUSAL_RESPONSES["off_topic"]), [], False
+        return REFUSAL_RESPONSES.get(category, REFUSAL_RESPONSES["off_topic"]), None, False
 
     # ── 3. Handle comparison ──────────────────────────────────────────────
     if intent == "compare":
@@ -283,9 +288,11 @@ def run_agent(messages: List[Dict]) -> Tuple[str, Optional[List[Dict]], bool]:
     # Format catalog candidates for LLM
     catalog_block = ""
     for i, item in enumerate(candidates, 1):
+        langs_list = item.get("languages", [])
+        langs = ", ".join(langs_list[:2]) + (f" (+{len(langs_list)-2} more)" if len(langs_list) > 2 else "") if langs_list else "—"
         catalog_block += (
             f"{i}. {item['name']} | Type: {','.join(item.get('test_type',[]))} | "
-            f"Duration: {item.get('duration','—')} | "
+            f"Duration: {item.get('duration','—')} | Languages: {langs} | "
             f"{', '.join(item.get('test_type_labels',[]))}\n"
             f"   URL: {item['url']}\n"
             f"   {item.get('description','')[:100]}\n\n"
@@ -294,11 +301,11 @@ def run_agent(messages: List[Dict]) -> Tuple[str, Optional[List[Dict]], bool]:
     # Build conversation summary for LLM
     conv_summary = "\n".join(
         f"{'User' if m['role']=='user' else 'Agent'}: {m['content'][:200]}"
-        for m in messages[-6:]  # Last 6 turns for context
+        for m in messages[-8:]  # Last 8 turns for context
     )
 
     is_refinement = intent == "refine"
-    is_final = state.get("turn_count", 0) >= 6
+    is_final = state.get("turn_count", 0) >= 8
 
     llm_prompt = f"""You are producing the next response in an SHL assessment recommendation conversation.
 
@@ -320,7 +327,7 @@ PRE-RETRIEVED CATALOG ITEMS (use ONLY these):
 INSTRUCTION:
 {"Update the shortlist based on the refinement request." if is_refinement else "Generate the assessment battery recommendation."}
 1. Select the most relevant 2-8 items from the pre-retrieved list above
-2. Write 1-2 sentences of rationale
+2. Write 1-2 sentences of rationale. DO NOT use robotic phrases like "Based on the extracted context" or "Based on the user's input". Be natural, engaging, and conversational. Directly address the user (e.g. "Here is a recommended assessment battery for your Software Engineer role...").
 3. Then output the markdown table with columns: # | Name | Test Type | Keys | Duration | Languages | URL
 4. Use EXACT names and URLs from the catalog items listed above — do not modify them
 5. For professional/senior selection, include OPQ32r unless excluded

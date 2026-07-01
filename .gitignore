@@ -1,8 +1,24 @@
-# Environments
-myenv/
-env/
+# Virtual Environments
+.venv/
+.venv_local/
 venv/
+env/
+myenv/
 .env
+
+# Node.js / Frontend
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.eslintcache
+
+# Vite build output
+dist/
+frontend/dist/
+.vite/
 
 # Python
 __pycache__/
@@ -21,3 +37,9 @@ htmlcov/
 # IDEs
 .vscode/
 .idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
