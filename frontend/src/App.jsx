@@ -31,6 +31,7 @@ const extractHiringContext = (messages) => {
     { keywords: ['full stack', 'fullstack', 'full-stack'],                       label: 'Full Stack Developer' },
     { keywords: ['devops', 'sre', 'platform engineer', 'site reliability'],      label: 'DevOps / SRE Engineer' },
     { keywords: ['data scientist', 'data science'],                              label: 'Data Scientist' },
+    { keywords: ['data analyst', 'data analytics', 'bi analyst'],                label: 'Data Analyst' },
     { keywords: ['machine learning', 'ml engineer'],                             label: 'ML Engineer' },
     { keywords: ['data engineer', 'data pipeline', 'etl'],                      label: 'Data Engineer' },
     { keywords: ['java developer', 'java engineer'],                             label: 'Java Developer' },
@@ -82,9 +83,10 @@ const extractHiringContext = (messages) => {
   if (!state.role) {
     const rawPatterns = [
       /(?:hiring|hire)\s+(?:for\s+)?(?:a\s+|an\s+)?([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
-      /(?:need\s+a|need\s+an|looking\s+for\s+a|looking\s+for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
-      /(?:for\s+a|for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
+      /(?:need|looking\s+for)(?:\s+a|\s+an)?\s+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
+      /(?:for)(?:\s+a|\s+an)?\s+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
       /(?:role|position)[:\s]+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+with|\s+who|\s+that|[.,!?]|$)/i,
+      /^(?:i(?:'m| am)|we(?:'re| are))\s+(?:hiring|looking)(?:\s+for)?(?:\s+a|\s+an)?\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|[.?!]|$)/i,
     ];
     for (const msg of messages.filter(m => msgRole(m) === 'user')) {
       for (const pattern of rawPatterns) {
@@ -101,6 +103,21 @@ const extractHiringContext = (messages) => {
       if (state.role) break;
     }
   }
+
+  // ── Role fallback 2: aggressive assumption for short messages ─────────────
+  if (!state.role) {
+    for (const msg of messages.filter(m => msgRole(m) === 'user')) {
+      const cleaned = msg.content.replace(/^(?:hi|hello|hey|i need|we need|looking for|hiring|tests for|assessments for)\b\s*(?:a\s+|an\s+)?/i, '').trim();
+      const words = cleaned.split(/\s+/);
+      if (words.length >= 1 && words.length <= 4 && cleaned.length >= 3) {
+        if (!["yes", "no", "ok", "okay", "sure", "thanks", "thank you"].includes(cleaned.toLowerCase())) {
+          state.role = cleaned.replace(/\b\w/g, c => c.toUpperCase());
+          break;
+        }
+      }
+    }
+  }
+
 
   // Extract Seniority & Experience
   let yrs = null;

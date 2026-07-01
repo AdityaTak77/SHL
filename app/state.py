@@ -62,6 +62,9 @@ ROLE_PATTERNS = {
         "data scientist", "ml engineer", "machine learning", "ai engineer",
         "data science"
     ],
+    "data_analyst": [
+        "data analyst", "data analytics", "bi analyst", "business intelligence"
+    ],
     "sales": [
         "sales", "account executive", "ae", "bdr", "sdr", "business development",
         "account manager", "sales rep", "sales representative"
@@ -211,10 +214,10 @@ def extract_state(messages: List[Dict]) -> Dict:
             if not state["raw_role_title"]:
                 _raw_role_patterns = [
                     r"(?:hiring|hire)\s+(?:for\s+)?(?:a\s+|an\s+)?([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
-                    r"(?:need\s+a|need\s+an|looking\s+for\s+a|looking\s+for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
-                    r"(?:for\s+a|for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
+                    r"(?:need|looking\s+for)(?:\s+a|\s+an)?\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
+                    r"(?:for)(?:\s+a|\s+an)?\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
                     r"(?:role|position)[:\s]+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+with|\s+who|\s+that|[.,!?]|$)",
-                    r"^(?:i(?:'m| am)|we(?:'re| are))\s+(?:hiring|looking)\s+(?:for\s+)?(?:a\s+)?([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|[.?!]|$)",
+                    r"^(?:i(?:'m| am)|we(?:'re| are))\s+(?:hiring|looking)(?:\s+for)?(?:\s+a|\s+an)?\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|[.?!]|$)",
                 ]
                 for _pat in _raw_role_patterns:
                     _m = re.search(_pat, content, re.IGNORECASE)
@@ -224,6 +227,16 @@ def extract_state(messages: List[Dict]) -> Dict:
                         if 1 <= len(_words) <= 5 and len(_candidate) >= 3:
                             state["raw_role_title"] = _candidate.title()
                             break
+                            
+            # Fallback: if no role found and message is short, assume they just typed the role directly
+            if not state["raw_role_title"] and not state["role_categories"]:
+                _cleaned = re.sub(r'^(?:hi|hello|hey|i need|we need|looking for|hiring|tests for|assessments for)\b\s*(?:a\s+|an\s+)?', '', content_lower, flags=re.IGNORECASE).strip()
+                _words = _cleaned.split()
+                if 1 <= len(_words) <= 4 and len(_cleaned) >= 3:
+                    # Filter out purely conversational short messages
+                    if _cleaned not in ["yes", "no", "ok", "okay", "sure", "thanks", "thank you"]:
+                        state["raw_role_title"] = _cleaned.title()
+
 
             # Extract test type focus
             for tt, keywords in TEST_TYPE_PATTERNS.items():
