@@ -224,10 +224,10 @@ export default function App() {
         <header className="app-header">
           <div>
             <h2 className="header-title">
-              Conversational Battery Design
+              SHL Assessment Recommender
             </h2>
             <p className="header-subtitle">
-              Interactive session with candidate requirements evaluation
+              AI-powered test battery suggestions tailored to your hiring needs
             </p>
           </div>
 
