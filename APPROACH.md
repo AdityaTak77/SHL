@@ -13,11 +13,7 @@
 The system is a conversational retrieval agent with a strict separation between retrieval (deterministic) and generation (LLM-based).
 
 ```text
-[User POST /chat] 
-   └──> [State Extractor] (Builds JSON from history) 
-           └──> [Intent Detection] (Recommend / Clarify / Refuse)
-                   ├──> (If Refuse) ──────> [Refusal Response]
-                   └──> (If Recommend) ───> [BM25 Search] ──> [Metadata Scoring] ──> [LLM Gen] ──> [Validation] ──> [Output]
+[User POST /chat] ──> [State Extractor] ──> [Intent Detection] ──> [BM25 Search] ──> [Metadata Scoring] ──> [LLM Gen] ──> [Validation] ──> [Output]
 ```
 
 ## 2. Retrieval Design
@@ -41,58 +37,29 @@ Stage 3 — LLM reranking: Groq Llama 3.3 70b receives the top-10 pre-retrieved 
 
 Stage 4 — Validation: Every URL in the LLM output is checked against the catalog. Any hallucinated item is dropped. Fallback to retrieval results if LLM produces no valid items.
 
-**Why not pure embedding/vector search?**
-For a catalog of ~60 assessments, BM25 outperforms embedding models on exact-match recall for technical skills ("Docker", "HIPAA", "SVAR"). Embeddings add noise for short domain-specific terms. Our multi-signal scoring provides the semantic layer without embedding overhead.
+
 
 ## 3. State Reconstruction
 
 Every API call receives the full conversation history. A deterministic extractor builds a structured state object:
 
-```json
-{
-  "role": "java_developer", "seniority": "professional",
-  "technical_skills": ["java", "spring"], "personality_focus": false,
-  "language_requirements": ["english_us"], "use_case": "selection",
-  "turn_count": 4
-}
-```
+`{ "role": "java_developer", "seniority": "professional", "technical_skills": ["java", "spring"], "use_case": "selection", "turn_count": 4 }`
 This state is the single source of truth. No memory = no state bugs.
 
 ## 4. Clarification Policy
 
-**Turn budget: 8 turns.**
-
-Rules:
-1. Never ask more than one clarification round (compound questions only)
-2. If turn_count >= 6, always recommend
-3. Ask only when role AND seniority are both unknown
-
-**Bad pattern (wastes turns):**
-> "What role is this for?" → User answers → "What seniority?" → User answers → "Personality or cognitive?" → User answers → (turn 4 before first recommendation)
-
-**Our pattern:**
-> "Could you tell me: the role title and seniority level / whether personality or cognitive assessments are important?" → User answers → Recommend immediately
+**Rules:**
+1. Never ask more than one clarification round (compound questions only).
+2. If turn_count >= 6, force a recommendation to preserve the 8-turn budget.
+3. Ask *only* when both role and seniority are unknown.
 
 ## 5. Evaluation Methodology
 
-Automated test suite (40+ tests):
-
-| Category | Count | Pass Target |
-|----------|-------|-------------|
-| Catalog integrity | 10 | 100% |
-| State extraction | 10 | 100% |
-| Retrieval recall | 10 | ≥70% |
-| Refusal detection | 6 | 100% |
-| Schema compliance | 4 | 100% |
-| Hallucination prevention | 4 | 100% |
-| Behavior probes | 5 | ≥80% |
-
-**Recall@10 computation:**
-```python
-recall = |retrieved_top_10 ∩ ground_truth| / |ground_truth|
-```
-
-Target: ≥0.7 across all 10 sample conversation scenarios.
+Automated test suite (40+ tests targeting 100% pass rates across critical functions):
+- **Catalog Integrity & Schema Compliance:** 14 tests ensuring valid payloads and valid SHL URLs.
+- **State Extraction:** 10 tests validating accurate constraint parsing.
+- **Refusal & Probes:** 11 tests verifying the agent drops illegal/hallucinated prompts.
+- **Retrieval Recall:** 10 end-to-end tests measuring Recall@10 against ground-truth scenarios (Target: ≥0.7).
 
 ## 6. Tradeoffs & Failed Experiments
 
