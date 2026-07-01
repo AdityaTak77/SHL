@@ -1,8 +1,8 @@
 <style>
-  body { font-size: 11px; line-height: 1.3; }
-  h1 { font-size: 16px; margin-top: 8px; margin-bottom: 4px; }
-  h2 { font-size: 13px; margin-top: 8px; margin-bottom: 4px; }
-  p, ul { margin-top: 4px; margin-bottom: 4px; }
+  body { font-size: 11px; line-height: 1.4; }
+  h1 { font-size: 18px; margin-top: 12px; margin-bottom: 8px; }
+  h2 { font-size: 14px; margin-top: 12px; margin-bottom: 8px; }
+  h3 { font-size: 12px; margin-top: 12px; margin-bottom: 8px; }
   pre, code { font-size: 10px; }
 </style>
 
@@ -10,37 +10,81 @@
 
 ## 1. Architecture
 
-The system is a conversational retrieval agent separating deterministic retrieval from LLM generation.
+The system is a conversational retrieval agent with a strict separation between retrieval (deterministic) and generation (LLM-based).
 
 ```text
-[User POST] ──> [State Extractor] ──> [Intent Detection] ──> [BM25 Search & Meta-Scoring] ──> [LLM Generation] ──> [Validation]
+[User POST /chat] 
+   └──> [State Extractor] (Builds JSON from history) 
+           └──> [Intent Detection] (Recommend / Clarify / Refuse)
+                   ├──> (If Refuse) ──────> [Refusal Response]
+                   └──> (If Recommend) ───> [BM25 Search] ──> [Metadata Scoring] ──> [LLM Gen] ──> [Validation] ──> [Output]
 ```
 
 ## 2. Retrieval Design
 
-**Hybrid retrieval pipeline to maximise Recall@10:**
-- **Stage 1 (BM25):** Over a composite field (name + desc + competencies + use_cases). Catches exact keyword signals ("Java", "Docker", "HIPAA").
-- **Stage 2 (Metadata Scoring):** Blends BM25 (35%) with Competency overlap (25%), Test type (15%), Seniority (10%), Use-case (10%), Language (5%).
-- **Stage 3 (LLM reranking):** Groq Llama 3.3 70b receives the top-10 candidates, selects optimal items, and writes rationale.
-- **Stage 4 (Validation):** Every URL outputted is checked against the catalog. Hallucinated items are dropped.
-- *Why not pure embeddings?* BM25 outperforms embeddings for exact-match technical skills. Embeddings add noise for short domain terms.
+**Why hybrid retrieval maximises Recall@10:**
 
-## 3. State Reconstruction & Clarification
+Stage 1 — BM25: Okapi BM25 with k1=1.5, b=0.75 over a composite document field (name + description + competencies + technical_domains + use_cases). Catches exact keyword signals like "Java", "Docker", "HIPAA", "DSI".
 
-Every API call parses the full history to build a deterministic state object (Role, Seniority, Skills, Use-case, Turn Count). No session memory equals no state-sync bugs.
-- **Turn budget:** Max 8 turns.
-- **Clarification Policy:** Ask only when role AND seniority are unknown. If `turn_count >= 6`, recommend immediately. Use compound questions to prevent wasting turns.
+Stage 2 — Metadata Scoring: Five orthogonal signals combined with learned weights:
 
-## 4. Evaluation Methodology
+| Signal | Weight | Rationale |
+|--------|--------|-----------|
+| BM25 (normalised) | 0.35 | Keyword recall anchor |
+| Competency overlap | 0.25 | Role-skill alignment |
+| Test type preference | 0.15 | User expressed needs |
+| Seniority match | 0.10 | Avoids level mismatch |
+| Use case match | 0.10 | Selection vs development |
+| Language match | 0.05 | Constraint satisfaction |
 
-Automated test suite with >40 tests measuring Recall, Groundedness, and Safety.
-- **Recall@10 target (≥0.7):** Tested against 10 ground-truth HR conversation scenarios.
-- **Behavior Probes & Schema Checks:** Ensure 100% schema compliance, zero hallucinations, and proper refusal of legal/compensation queries.
+Stage 3 — LLM reranking: Groq Llama 3.3 70b receives the top-10 pre-retrieved candidates and conversation context. LLM selects the optimal 2-8 items, writes rationale, and produces the table.
 
-## 5. Tradeoffs & Failed Experiments
-- **Failed: Pure semantic search** — Poor recall for exact technical terms. Dropped.
-- **Failed: Full catalog prompt** — Too slow and expensive (30k tokens/call). Switched to RAG.
-- **Tradeoff: Groq Llama 3.3 70b** — Extremely fast and strictly follows markdown table instructions.
-- **Tradeoff: In-memory BM25** — Sufficient and instant for a 60-item catalog, avoiding external vector-DB overhead.
+Stage 4 — Validation: Every URL in the LLM output is checked against the catalog. Any hallucinated item is dropped. Fallback to retrieval results if LLM produces no valid items.
 
+**Why not pure embedding/vector search?**
+For a catalog of ~60 assessments, BM25 outperforms embedding models on exact-match recall for technical skills ("Docker", "HIPAA", "SVAR"). Embeddings add noise for short domain-specific terms. Our multi-signal scoring provides the semantic layer without embedding overhead.
 
+## 3. State Reconstruction
+
+Every API call receives the full conversation history. A deterministic extractor builds a structured state object:
+
+```json
+{ "role": "java_developer", "seniority": "professional", "technical_skills": ["java", "spring"], "use_case": "selection", "turn_count": 4 }
+```
+This state is the single source of truth. No memory = no state bugs.
+
+## 4. Clarification Policy
+
+**Turn budget: 8 turns.**
+
+Rules:
+1. Never ask more than one clarification round (compound questions only)
+2. If turn_count >= 6, always recommend
+3. Ask only when role AND seniority are both unknown
+
+**Bad pattern:** "What role?" → User answers → "What seniority?" → User answers → (turn 4 before recommendation).
+**Our pattern:** "Could you tell me: the role title and seniority level?" → User answers → Recommend immediately.
+
+## 5. Evaluation Methodology
+
+Automated test suite (40+ tests):
+
+| Category | Count | Pass Target |
+|----------|-------|-------------|
+| Catalog integrity | 10 | 100% |
+| State extraction | 10 | 100% |
+| Retrieval recall | 10 | ≥70% |
+| Refusal detection | 6 | 100% |
+| Schema compliance | 4 | 100% |
+| Hallucination prevention | 4 | 100% |
+| Behavior probes | 5 | ≥80% |
+
+**Recall@10 computation:** `recall = |retrieved_10 ∩ ground_truth| / |ground_truth|` (Target: ≥0.7)
+
+## 6. Tradeoffs & Failed Experiments
+
+**Tried: Pure semantic embedding search** — Lower recall for exact technical terms (Java, Docker). Dropped.
+**Tried: Single large prompt with full catalog** — Slow and expensive (30k tokens). Switched to pre-retrieval → LLM reranking.
+**Tried: Per-question clarification** — Burns turns. Switched to compound single-question policy.
+**Tradeoff: No persistent vector store** — BM25 in-memory is instant for a 60-item catalog. At 1000+ items, would add pgvector.
+**Tradeoff: Groq Llama 3.3 70b** — High-speed API inference, excellent markdown table instruction compliance.
