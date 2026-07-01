@@ -1,37 +1,21 @@
+<style>
+  body { font-size: 11px; line-height: 1.4; }
+  h1, h2, h3 { margin-top: 12px; margin-bottom: 8px; }
+  pre, code { font-size: 10px; }
+</style>
+
 # SHL Assessment Recommender — Approach Document
 
 ## 1. Architecture
 
 The system is a conversational retrieval agent with a strict separation between retrieval (deterministic) and generation (LLM-based).
 
-```
-User → POST /chat
-         │
-         ▼
-   State Reconstruction     ← full history every request
-         │
-         ▼
-   Intent Detection         ← recommend / clarify / compare / refuse
-         │
-    ┌────┴────────────────────────┐
-    │                             │
- Refusal                    Retrieval
-    │                             │
-    └────────┬────────────────────┘
-             │
-         BM25 Stage (25 candidates)
-             │
-         Metadata Scoring (seniority, language, use-case)
-             │
-         Competency Overlap Scoring
-             │
-         Final Ranked List (top 10)
-             │
-          LLM Generation (Groq Llama 3.3 70b)
-             │
-         Hallucination Validation (assert URL in catalog)
-             │
-         POST /chat Response → { message, recommendations, end_of_conversation }
+```text
+[User POST /chat] 
+   └──> [State Extractor] (Builds JSON from history) 
+           └──> [Intent Detection] (Recommend / Clarify / Refuse)
+                   ├──> (If Refuse) ──────> [Refusal Response]
+                   └──> (If Recommend) ───> [BM25 Search] ──> [Metadata Scoring] ──> [LLM Gen] ──> [Validation] ──> [Output]
 ```
 
 ## 2. Retrieval Design
