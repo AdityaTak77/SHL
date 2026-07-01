@@ -141,6 +141,7 @@ def extract_state(messages: List[Dict]) -> Dict:
     state = {
         "role": None,
         "role_categories": [],
+        "raw_role_title": None,   # Literal role name as typed by the user
         "seniority": None,
         "experience_years": None,
         "technical_skills": [],
@@ -205,6 +206,24 @@ def extract_state(messages: List[Dict]) -> Dict:
                 if any(kw in content_lower for kw in keywords):
                     if role_cat not in state["role_categories"]:
                         state["role_categories"].append(role_cat)
+
+            # Extract raw role title for any role not matched by patterns
+            if not state["raw_role_title"]:
+                _raw_role_patterns = [
+                    r"(?:hiring|hire)\s+(?:for\s+)?(?:a\s+|an\s+)?([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
+                    r"(?:need\s+a|need\s+an|looking\s+for\s+a|looking\s+for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
+                    r"(?:for\s+a|for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)",
+                    r"(?:role|position)[:\s]+([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+with|\s+who|\s+that|[.,!?]|$)",
+                    r"^(?:i(?:'m| am)|we(?:'re| are))\s+(?:hiring|looking)\s+(?:for\s+)?(?:a\s+)?([A-Za-z][A-Za-z\s\-\/]+?)(?:\s+role|\s+position|\s+with|\s+who|[.?!]|$)",
+                ]
+                for _pat in _raw_role_patterns:
+                    _m = re.search(_pat, content, re.IGNORECASE)
+                    if _m:
+                        _candidate = _m.group(1).strip()
+                        _words = _candidate.split()
+                        if 1 <= len(_words) <= 5 and len(_candidate) >= 3:
+                            state["raw_role_title"] = _candidate.title()
+                            break
 
             # Extract test type focus
             for tt, keywords in TEST_TYPE_PATTERNS.items():
@@ -359,7 +378,7 @@ def needs_clarification(state: Dict, turn_count: int) -> bool:
         return False
 
     # If we have enough info to recommend, skip clarification
-    has_role = bool(state["role_categories"] or state["technical_skills"])
+    has_role = bool(state["role_categories"] or state["technical_skills"] or state.get("raw_role_title"))
     has_seniority = state["seniority"] is not None or state["experience_years"] is not None
     has_context = len(state["raw_context"]) > 0
 

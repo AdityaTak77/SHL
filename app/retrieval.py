@@ -255,6 +255,9 @@ def _build_query(state: Dict, messages: List[Dict]) -> str:
         parts.extend(state["technical_skills"])
     if state.get("seniority"):
         parts.append(state["seniority"])
+    # Include raw role title (catches any role not in predefined patterns)
+    if state.get("raw_role_title"):
+        parts.append(state["raw_role_title"])
 
     # Test type signals
     if state.get("personality_focus"):

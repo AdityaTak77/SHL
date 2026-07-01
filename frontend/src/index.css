@@ -107,6 +107,21 @@ body, aside, .glass-panel, .profile-item, .message-bubble, header, .status-bar, 
   height: 100%;
   overflow-y: auto;
   flex-shrink: 0;
+  transition: width 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+}
+
+/* Collapsed sidebar — slides to zero width */
+.app-sidebar.sidebar-closed {
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  border-right: none;
+}
+
+/* Workspace expands to full width when sidebar is hidden */
+.app-workspace.sidebar-hidden {
+  width: 100%;
 }
 
 .app-logo-container {

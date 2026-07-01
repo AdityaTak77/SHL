@@ -5,7 +5,8 @@ import {
   Cpu, 
   Globe, 
   ShieldAlert, 
-  Info
+  Info,
+  PanelLeftClose
 } from 'lucide-react';
 
 const TEST_TYPES = [
@@ -18,16 +19,25 @@ const TEST_TYPES = [
   { code: 'S', name: 'Simulations', desc: 'Interactive or live-coding tasks' },
 ];
 
-export default function Sidebar({ extractedState, turnCount }) {
+export default function Sidebar({ extractedState, turnCount, isOpen, onToggle }) {
   const isWarning = turnCount >= 6;
 
   return (
-    <aside className="app-sidebar">
+    <aside className={`app-sidebar${isOpen ? '' : ' sidebar-closed'}`}>
       {/* App Header */}
       <div>
         <div className="app-logo-container">
           <div className="logo-badge" style={{ width: '48px', fontSize: '13px' }}>SHL</div>
           <h1 className="logo-text">Recommender</h1>
+          {/* Hide sidebar button */}
+          <button
+            onClick={onToggle}
+            className="btn-reset"
+            title="Hide sidebar"
+            style={{ marginLeft: 'auto', padding: '4px 6px' }}
+          >
+            <PanelLeftClose size={14} />
+          </button>
         </div>
         <p className="sidebar-desc">Conversational AI Agent • Catalog v1.0</p>
       </div>

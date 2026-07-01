@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
 import StatusBar from './components/StatusBar';
-import { RotateCcw, AlertCircle, Sun, Moon } from 'lucide-react';
+import { RotateCcw, AlertCircle, Sun, Moon, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 // Helper to extract hiring context on client-side for visualization
 const extractHiringContext = (messages) => {
@@ -24,28 +24,81 @@ const extractHiringContext = (messages) => {
 
   if (!userText) return state;
 
-  // Extract Role
-  if (userText.includes('frontend') || userText.includes('front end')) state.role = 'Frontend Developer';
-  else if (userText.includes('backend') || userText.includes('back end')) state.role = 'Backend Developer';
-  else if (userText.includes('full stack') || userText.includes('fullstack')) state.role = 'Full Stack Developer';
-  else if (userText.includes('java')) state.role = 'Java Developer';
-  else if (userText.includes('sales')) state.role = 'Sales Professional';
-  else if (userText.includes('contact centre') || userText.includes('call center') || userText.includes('customer service')) state.role = 'Customer Service Representative';
-  else if (userText.includes('devops') || userText.includes('sre') || userText.includes('docker') || userText.includes('kubernetes')) state.role = 'DevOps / SRE Engineer';
-  else if (userText.includes('data scientist') || userText.includes('machine learning') || userText.includes('ml')) state.role = 'Data Scientist';
-  else if (userText.includes('data engineer')) state.role = 'Data Engineer';
-  else if (userText.includes('python')) state.role = 'Python Developer';
-  else if (userText.includes('marketing') || userText.includes('digital marketing')) state.role = 'Marketing Professional';
-  else if (userText.includes('manager') || userText.includes('lead')) state.role = 'Management / Team Leader';
-  else if (userText.includes('leadership') || userText.includes('executive') || userText.includes('director') || userText.includes('cxo')) state.role = 'Executive Leadership';
-  else if (userText.includes('qa ') || userText.includes('quality assurance') || userText.includes('tester')) state.role = 'QA Engineer';
-  else if (userText.includes('software engineer') || userText.includes('developer') || userText.includes('swe')) state.role = 'Software Engineer';
-  else {
-    // Try to guess first few words from initial prompt
-    const firstUserMsg = messages.find(m => msgRole(m) === 'user');
-    if (firstUserMsg) {
-      const match = firstUserMsg.content.match(/(?:hire|hiring|need a|for a)\s+([a-zA-Z\s\-]+?)(?:\.|\,|$|\s+with|\s+who)/i);
-      if (match && match[1]) state.role = match[1].trim().replace(/\b\w/g, c => c.toUpperCase());
+  // ── Role: prioritised keyword map ──────────────────────────────────────
+  const ROLE_MAP = [
+    { keywords: ['frontend', 'front end', 'front-end'],                          label: 'Frontend Developer' },
+    { keywords: ['backend', 'back end', 'back-end'],                             label: 'Backend Developer' },
+    { keywords: ['full stack', 'fullstack', 'full-stack'],                       label: 'Full Stack Developer' },
+    { keywords: ['devops', 'sre', 'platform engineer', 'site reliability'],      label: 'DevOps / SRE Engineer' },
+    { keywords: ['data scientist', 'data science'],                              label: 'Data Scientist' },
+    { keywords: ['machine learning', 'ml engineer'],                             label: 'ML Engineer' },
+    { keywords: ['data engineer', 'data pipeline', 'etl'],                      label: 'Data Engineer' },
+    { keywords: ['java developer', 'java engineer'],                             label: 'Java Developer' },
+    { keywords: ['python developer', 'python engineer'],                         label: 'Python Developer' },
+    { keywords: ['software engineer', 'software developer', 'swe'],             label: 'Software Engineer' },
+    { keywords: ['sales representative', 'sales rep', 'account executive', 'bdr', 'sdr'], label: 'Sales Representative' },
+    { keywords: ['sales manager', 'sales lead'],                                 label: 'Sales Manager' },
+    { keywords: ['sales'],                                                       label: 'Sales Professional' },
+    { keywords: ['contact centre', 'contact center', 'call centre', 'call center', 'customer service', 'customer support'], label: 'Customer Service Agent' },
+    { keywords: ['digital marketing', 'content marketer', 'seo specialist'],    label: 'Digital Marketing Specialist' },
+    { keywords: ['marketing'],                                                   label: 'Marketing Professional' },
+    { keywords: ['financial analyst', 'finance analyst'],                        label: 'Financial Analyst' },
+    { keywords: ['accountant', 'accounting', 'bookkeeper'],                      label: 'Accountant' },
+    { keywords: ['finance'],                                                     label: 'Finance Professional' },
+    { keywords: ['recruiter', 'talent acquisition', 'hrbp'],                    label: 'HR / Recruiter' },
+    { keywords: ['human resources', ' hr '],                                    label: 'HR Professional' },
+    { keywords: ['nurse', 'nursing', 'registered nurse'],                        label: 'Nurse' },
+    { keywords: ['doctor', 'physician', 'medical officer'],                      label: 'Physician' },
+    { keywords: ['pharmacist', 'pharmacy'],                                      label: 'Pharmacist' },
+    { keywords: ['healthcare', 'clinical', 'patient care'],                      label: 'Healthcare Professional' },
+    { keywords: ['civil engineer'],                                              label: 'Civil Engineer' },
+    { keywords: ['mechanical engineer'],                                         label: 'Mechanical Engineer' },
+    { keywords: ['electrical engineer'],                                         label: 'Electrical Engineer' },
+    { keywords: ['qa engineer', 'quality assurance', 'test engineer', 'tester'], label: 'QA Engineer' },
+    { keywords: ['product manager', 'product lead'],                             label: 'Product Manager' },
+    { keywords: ['project manager', 'project lead'],                             label: 'Project Manager' },
+    { keywords: ['ceo', 'cto', 'cfo', 'coo', 'cxo', 'chief executive'],         label: 'C-Suite Executive' },
+    { keywords: ['executive', 'senior leadership'],                              label: 'Executive Leader' },
+    { keywords: ['director'],                                                    label: 'Director' },
+    { keywords: ['plant operator', 'factory worker', 'line worker'],             label: 'Manufacturing Operator' },
+    { keywords: ['manufacturing', 'industrial operator'],                        label: 'Manufacturing Professional' },
+    { keywords: ['retail', 'store associate', 'cashier'],                        label: 'Retail Associate' },
+    { keywords: ['lawyer', 'attorney', 'paralegal'],                             label: 'Legal Professional' },
+    { keywords: ['admin', 'administrative assistant', 'secretary'],              label: 'Administrative Assistant' },
+    { keywords: ['manager', 'team lead', 'team leader'],                         label: 'Manager / Team Lead' },
+    { keywords: ['developer', 'programmer'],                                     label: 'Software Developer' },
+    { keywords: ['java'],                                                        label: 'Java Developer' },
+    { keywords: ['python'],                                                      label: 'Python Developer' },
+  ];
+
+  for (const { keywords, label } of ROLE_MAP) {
+    if (keywords.some(kw => userText.includes(kw))) {
+      state.role = label;
+      break;
+    }
+  }
+
+  // ── Role fallback: regex extraction from raw user messages ─────────────
+  if (!state.role) {
+    const rawPatterns = [
+      /(?:hiring|hire)\s+(?:for\s+)?(?:a\s+|an\s+)?([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
+      /(?:need\s+a|need\s+an|looking\s+for\s+a|looking\s+for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
+      /(?:for\s+a|for\s+an)\s+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+role|\s+position|\s+with|\s+who|\s+that|[.,!?]|$)/i,
+      /(?:role|position)[:\s]+([A-Za-z][A-Za-z\s\-\/]{2,35}?)(?:\s+with|\s+who|\s+that|[.,!?]|$)/i,
+    ];
+    for (const msg of messages.filter(m => msgRole(m) === 'user')) {
+      for (const pattern of rawPatterns) {
+        const match = msg.content.match(pattern);
+        if (match && match[1]) {
+          const candidate = match[1].trim();
+          const words = candidate.split(/\s+/);
+          if (words.length >= 1 && words.length <= 5) {
+            state.role = candidate.replace(/\b\w/g, c => c.toUpperCase());
+            break;
+          }
+        }
+      }
+      if (state.role) break;
     }
   }
 
@@ -134,6 +187,7 @@ export default function App() {
   const [isFinal, setIsFinal] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [theme, setTheme] = useState('light');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [extractedState, setExtractedState] = useState({
     role: '',
     seniority: '',
@@ -192,7 +246,7 @@ export default function App() {
       
       let friendlyError = error.message;
       if (friendlyError.includes('429') || friendlyError.includes('RESOURCE_EXHAUSTED')) {
-        friendlyError = 'Gemini API limit exceeded. Please wait 45-60 seconds for the daily/minute cooldown to reset and retry!';
+        friendlyError = 'Rate limit exceeded. Please wait a moment and retry!';
       }
       
       setErrorMsg(friendlyError);
@@ -213,22 +267,38 @@ export default function App() {
   return (
     <>
       {/* Sidebar Navigation */}
-      <Sidebar extractedState={extractedState} turnCount={turnCount} />
+      <Sidebar
+        extractedState={extractedState}
+        turnCount={turnCount}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(p => !p)}
+      />
 
       {/* Main Content Area */}
-      <div className="app-workspace">
+      <div className={`app-workspace${sidebarOpen ? '' : ' sidebar-hidden'}`}>
         {/* Status indicator bar */}
         <StatusBar />
 
         {/* Chat Header */}
         <header className="app-header">
-          <div>
-            <h2 className="header-title">
-              SHL Assessment Recommender
-            </h2>
-            <p className="header-subtitle">
-              AI-powered test battery suggestions tailored to your hiring needs
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Show-sidebar button (only visible when sidebar is closed) */}
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="btn-reset"
+                title="Show sidebar"
+                style={{ padding: '6px 8px' }}
+              >
+                <PanelLeftOpen size={14} />
+              </button>
+            )}
+            <div>
+              <h2 className="header-title">SHL Assessment Recommender</h2>
+              <p className="header-subtitle">
+                AI-powered test battery suggestions tailored to your hiring needs
+              </p>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -259,9 +329,9 @@ export default function App() {
         <ChatWindow messages={messages} isTyping={isTyping} />
 
         {/* Chat Bottom Input */}
-        <ChatInput 
-          onSendMessage={handleSendMessage} 
-          disabled={isFinal} 
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          disabled={isFinal}
           isFinal={isFinal}
           isTyping={isTyping}
         />
