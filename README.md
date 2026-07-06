@@ -1,4 +1,4 @@
-# SHL Assessment Recommender
+# SHL Assessment Recommender:
 
 > A production-ready full-stack AI system for recommending SHL Individual Test Solutions. Built to maximise **Recall@10**, handle real-world hiring scenarios dynamically, and ensure hallucination-free grounded recommendations.
 
